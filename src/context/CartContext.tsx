@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { Product, products } from "../data/products";
 import { getCaseInsensitiveProperty, normalizeSlug, resolveImageUrl, shouldHideVariant } from "../api/productService";
-import { post, del } from "../api/BaseService";
+import { post, del, getCustomerIdFromToken } from "../api/BaseService";
 
 export interface CartItem {
   product: Product;
@@ -198,38 +198,7 @@ export function resolveCartItem(apiCartItem: any): CartItem | null {
   };
 }
 
-// Helper to extract customer ID from JWT token payload
-function getCustomerIdFromToken(token: string): string | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length < 2) return null;
-    const base64Url = parts[1];
-    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-    const jsonPayload = decodeURIComponent(
-      window.atob(base64)
-        .split("")
-        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-        .join("")
-    );
-    const decoded = JSON.parse(jsonPayload);
-    const customerId = decoded.CustomerId || 
-                       decoded.customerId || 
-                       decoded.Id || 
-                       decoded.id || 
-                       decoded.nameid || 
-                       decoded.sub ||
-                       decoded.uid ||
-                       decoded.UserId ||
-                       decoded.userid ||
-                       decoded["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"] ||
-                       decoded["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"];
-    console.log("[getCustomerIdFromToken] Decoded JWT CustomerId:", customerId);
-    return customerId ? String(customerId) : null;
-  } catch (e) {
-    console.error("[getCustomerIdFromToken] Failed to decode JWT token:", e);
-    return null;
-  }
-}
+// Shared helper getCustomerIdFromToken is imported from BaseService
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);

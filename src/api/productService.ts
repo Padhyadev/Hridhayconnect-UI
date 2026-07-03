@@ -156,7 +156,9 @@ export function resolveImageUrl(rawPath: string | undefined | null): string {
       return pathStr;
     } else {
       const cleanPath = pathStr.replace(/\\/g, "/").replace(/^\/+/, "");
-      return `https://hridhayconnectreact.bsite.net/${cleanPath}`;
+      const apiBase = import.meta.env.VITE_API_BASE_URL || "https://hridhayconnectreact.bsite.net/api";
+      const domain = apiBase.split("/api")[0] || "https://hridhayconnectreact.bsite.net";
+      return `${domain}/${cleanPath}`;
     }
   }
   return "/Image/Noimage.jpg";

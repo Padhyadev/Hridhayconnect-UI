@@ -2,8 +2,8 @@
 // export const API_BASE_URL = "https://localhost:7103/api";
 // export const RAZORPAY_KEY_ID = "rzp_test_T86G614Jko29cT";
 
-export const API_BASE_URL = "https://hridhayconnectreact.bsite.net/api";
-export const RAZORPAY_KEY_ID = "rzp_live_SNR6THeI8rRQIr";
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "https://hridhayconnectreact.bsite.net/api").trim();
+export const RAZORPAY_KEY_ID = (import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_live_SNR6THeI8rRQIr").trim();
 
 // Mapping of category page slugs to their respective API category IDs
 export const CATEGORY_IDS = {
@@ -102,11 +102,41 @@ export async function getBlob(url: string, config: RequestInit = {}) {
   return response.blob();
 }
 
-export function getLastApiResponse() {
-  return lastApiResponseData;
-}
-
 // Generic Lov dropdown helper
 export async function getLovDropdownList(lovColumn: string) {
   return get(`/Dropdown/LovMaster?Lov_column=${encodeURIComponent(lovColumn)}`);
 }
+
+// Centralized JWT Customer ID Decoder
+export function getCustomerIdFromToken(token: string): string | null {
+  if (!token) return null;
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      window.atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    const decoded = JSON.parse(jsonPayload);
+    const customerId = decoded.CustomerId || 
+                       decoded.customerId || 
+                       decoded.Id || 
+                       decoded.id || 
+                       decoded.nameid || 
+                       decoded.sub ||
+                       decoded.uid ||
+                       decoded.UserId ||
+                       decoded.userid ||
+                       decoded["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"] ||
+                       decoded["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"];
+    return customerId ? String(customerId) : null;
+  } catch (e) {
+    console.error("[getCustomerIdFromToken] Failed to decode JWT token:", e);
+    return null;
+  }
+}
+

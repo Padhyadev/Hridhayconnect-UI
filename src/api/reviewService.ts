@@ -1,4 +1,4 @@
-import { post } from './BaseService';
+import { post, getCustomerIdFromToken } from './BaseService';
 
 export interface ReviewItem {
   SrNo: number;
@@ -52,26 +52,10 @@ export function getUserId(): number {
 
   const token = localStorage.getItem("authToken");
   if (token) {
-    try {
-      const parts = token.split(".");
-      if (parts.length >= 2) {
-        const base64Url = parts[1];
-        const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-        const decoded = JSON.parse(window.atob(base64));
-        const uId = decoded.CustomerId || 
-                    decoded.customerId || 
-                    decoded.Id || 
-                    decoded.id || 
-                    decoded.UserId || 
-                    decoded.userid ||
-                    decoded.uid;
-        if (uId) {
-          const num = Number(uId);
-          if (!isNaN(num)) return num;
-        }
-      }
-    } catch (e) {
-      console.error("[reviewService] Error decoding token for user ID", e);
+    const customerId = getCustomerIdFromToken(token);
+    if (customerId) {
+      const num = Number(customerId);
+      if (!isNaN(num)) return num;
     }
   }
   return 0;

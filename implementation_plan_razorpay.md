@@ -8,8 +8,8 @@ We will implement a complete, robust Razorpay payment gateway integration for th
    - The ASP.NET Core 8 Web API project already has `Razorpay` package (3.3.2) referenced.
    - `PaymentController.cs` is already fully implemented with endpoints `POST /api/Payment/create-order` and `POST /api/Payment/verify`.
    - `appsettings.json` already contains the Razorpay test keys:
-     - Key: `rzp_test_T86G614Jko29cT`
-     - Secret: `ACny35BtulIk4ZlJhphg2vWK`
+     - Key: [REMOVED_FOR_SECURITY]
+     - Secret: [REMOVED_FOR_SECURITY]
 
 2. **Frontend Integration (To Be Implemented):**
    - We will modify `CheckoutPage.tsx` to dynamically load the official Razorpay checkout script (`checkout.js`).
