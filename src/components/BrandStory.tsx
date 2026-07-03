@@ -56,7 +56,7 @@ export function BrandStory() {
           >
             <motion.img
               style={{ y: imgY, scale: 1.2 }}
-              src="/HomePageimage/Ayurvedic.png"
+              src="/HomePageimage/Ayurvedic.jpg"
               alt="Botanical setup"
               loading="lazy"
               decoding="async"

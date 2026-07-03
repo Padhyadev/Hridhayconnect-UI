@@ -147,7 +147,8 @@ export function SectionCarousel({ section }: { section: HomeSection }) {
                   );
                 } else {
                   const localProd = item as Product;
-                  const product = products.find(p => p.id === localProd.id) || localProd;
+                  const mockProd = products.find(p => p.id === localProd.id);
+                  const product = mockProd ? { ...mockProd, ...localProd } : localProd;
                   return (
                     <div
                       key={`prod-${product.id}-${idx}`}

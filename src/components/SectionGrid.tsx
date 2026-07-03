@@ -22,7 +22,8 @@ export function SectionGrid({ section }: { section: HomeSection }) {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-8">
         {items.map((item, idx) => {
           const localProd = item as Product;
-          const product = products.find(p => p.id === localProd.id) || localProd;
+          const mockProd = products.find(p => p.id === localProd.id);
+          const product = mockProd ? { ...mockProd, ...localProd } : localProd;
           return (
             <div
               key={product.id || idx}

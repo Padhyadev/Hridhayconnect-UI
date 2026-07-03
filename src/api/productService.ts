@@ -1,4 +1,4 @@
-import { products, Product } from "../data/products";
+import { products, Product, syncProducts } from "../data/products";
 import { API_BASE_URL, post } from "./BaseService";
 
 export interface ApiProductImage {
@@ -78,6 +78,40 @@ export function getNumericProperty(obj: any, key: string): number | undefined {
 }
 
 /**
+ * Checks if a variant should be hidden based on attribute conditions.
+ * Hides variants where VariantAttributesId = '12:62' or VariantAttributeValues_Id = '62'.
+ */
+export function shouldHideVariant(item: any): boolean {
+  if (!item) return false;
+
+  const variantAttributesIdRaw = getCaseInsensitiveProperty<any>(item, "VariantAttributesId")
+    || getCaseInsensitiveProperty<any>(item, "VariantAttributes_Id")
+    || getCaseInsensitiveProperty<any>(item, "VariantAttributesId");
+  const variantAttributeValuesIdRaw = getCaseInsensitiveProperty<any>(item, "VariantAttributeValues_Id")
+    || getCaseInsensitiveProperty<any>(item, "VariantAttributeValues_ID")
+    || getCaseInsensitiveProperty<any>(item, "VariantAttributeValueId");
+
+  const variantAttributesId = variantAttributesIdRaw ? String(variantAttributesIdRaw).trim() : "";
+  const variantAttributeValuesId = variantAttributeValuesIdRaw ? String(variantAttributeValuesIdRaw).trim() : "";
+
+  // Exact matches
+  if (variantAttributesId === "12:62" || variantAttributeValuesId === "62") {
+    return true;
+  }
+
+  // Composite matches (in case values are comma/colon-separated lists)
+  if (variantAttributeValuesId.split(":").includes("62") || variantAttributeValuesId.split(",").includes("62")) {
+    return true;
+  }
+
+  if (variantAttributesId.split(",").includes("12:62") || variantAttributesId.split(";").includes("12:62")) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Robustly parses API response structure to find the table2 products array.
  * Supports wrapped "data"/"Data" and lowercase/PascalCase tables.
  */
@@ -122,16 +156,6 @@ export function resolveImageUrl(rawPath: string | undefined | null): string {
       return pathStr;
     } else {
       const cleanPath = pathStr.replace(/\\/g, "/").replace(/^\/+/, "");
-      
-      // If it's a local static asset folder, keep it relative to the frontend host
-      if (
-        cleanPath.startsWith("Image/") ||
-        cleanPath.startsWith("HomePageimage/") ||
-        cleanPath.startsWith("Instagram/")
-      ) {
-        return `/${cleanPath}`;
-      }
-      
       return `https://hridhayconnectreact.bsite.net/${cleanPath}`;
     }
   }
@@ -172,53 +196,77 @@ function extractImagesFromVariant(apiVar: any): string[] {
   return [];
 }
 
+let productsCache: Record<number, Product[]> = {};
+let productsPromiseCache: Record<number, Promise<Product[]>> = {};
+
 /**
  * Fetches products for a specific category ID from the backend API.
  * Maps and merges them with the local high-fidelity products metadata.
  */
-export async function fetchProductsFromApi(categoryId: number): Promise<Product[]> {
-  const body = {
-    Id: -2,
-    CategoryId: categoryId,
-    Search: "",
-    Start: 0,
-    Length: 9999,
-    SortColumnIndex: 0,
-    SortDirection: "DESC"
-  };
-  console.log(`[API Request] Fetching from /Product/GetAll`, body);
+export async function fetchProductsFromApi(categoryId: number, forceRefresh = false): Promise<Product[]> {
+  if (forceRefresh) {
+    delete productsCache[categoryId];
+    delete productsPromiseCache[categoryId];
+  }
 
-  try {
-    const result: any = await post("/Product/GetAll", body);
-    console.log(`[API Response] Successfully fetched categoryId ${categoryId} data:`, result);
-    const apiProducts = getApiProducts(result);
+  if (!forceRefresh && productsCache[categoryId]) {
+    return productsCache[categoryId];
+  }
+  if (!forceRefresh && productsPromiseCache[categoryId]) {
+    return productsPromiseCache[categoryId];
+  }
 
-    if (apiProducts.length === 0) {
+  productsPromiseCache[categoryId] = (async () => {
+    const body = {
+      Id: -2,
+      CategoryId: categoryId,
+      Search: "",
+      Start: 0,
+      Length: 9999,
+      SortColumnIndex: 0,
+      SortDirection: "DESC"
+    };
+    console.log(`[API Request] Fetching from /Product/GetAll`, body);
+
+    try {
+      const result: any = await post("/Product/GetAll", body);
+      console.log(`[API Response] Successfully fetched categoryId ${categoryId} data:`, result);
+      const apiProducts = getApiProducts(result);
+
+      if (apiProducts.length === 0) {
+        productsCache[categoryId] = [];
+        return [];
+      }
+
+      // Group the API products by ProductId to collect variants
+      const groupedProducts: Record<number, any[]> = {};
+      apiProducts.forEach(apiProd => {
+        const prodId = getCaseInsensitiveProperty<number>(apiProd, "ProductId");
+        if (prodId !== undefined && prodId !== null) {
+          const prodIdNum = Number(prodId);
+          if (!groupedProducts[prodIdNum]) {
+            groupedProducts[prodIdNum] = [];
+          }
+          groupedProducts[prodIdNum].push(apiProd);
+        }
+      });
+
+      const parsed = Object.keys(groupedProducts).map((prodIdStr) => {
+        const group = groupedProducts[Number(prodIdStr)];
+        return parseApiProductGroup(group);
+      });
+
+      productsCache[categoryId] = parsed;
+      return parsed;
+    } catch (error) {
+      console.error(`Error fetching products for categoryId ${categoryId}:`, error);
+      // Clear from promise cache on failure so future attempts can retry
+      delete productsPromiseCache[categoryId];
       return [];
     }
+  })();
 
-    // Group the API products by ProductId to collect variants
-    const groupedProducts: Record<number, any[]> = {};
-    apiProducts.forEach(apiProd => {
-      const prodId = getCaseInsensitiveProperty<number>(apiProd, "ProductId");
-      if (prodId !== undefined && prodId !== null) {
-        const prodIdNum = Number(prodId);
-        if (!groupedProducts[prodIdNum]) {
-          groupedProducts[prodIdNum] = [];
-        }
-        groupedProducts[prodIdNum].push(apiProd);
-      }
-    });
-
-    // Map each group to a single Product with a variants array
-    return Object.keys(groupedProducts).map((prodIdStr) => {
-      const group = groupedProducts[Number(prodIdStr)];
-      return parseApiProductGroup(group);
-    });
-  } catch (error) {
-    console.error(`Error fetching products for categoryId ${categoryId}:`, error);
-    return [];
-  }
+  return productsPromiseCache[categoryId];
 }
 
 /**
@@ -230,7 +278,7 @@ export function parseApiProductGroup(group: any[]): Product {
   const prodName = getCaseInsensitiveProperty<string>(primaryApiProd, "ProductName") || "";
   const prodSku = getCaseInsensitiveProperty<string>(primaryApiProd, "SKU") || "";
   const prodId = getCaseInsensitiveProperty<number>(primaryApiProd, "ProductId");
-  const prodDesc = getCaseInsensitiveProperty<string>(primaryApiProd, "ProductDescription") || "";
+  const prodDesc = (getCaseInsensitiveProperty<string>(primaryApiProd, "ProductDescription") || "").trim();
   const categoryIdVal = getNumericProperty(primaryApiProd, "CategoryId");
   const categoryNameVal = getCaseInsensitiveProperty<string>(primaryApiProd, "CategoryName") || "";
   const priceVal = getNumericProperty(primaryApiProd, "Price") || 0;
@@ -259,8 +307,13 @@ export function parseApiProductGroup(group: any[]): Product {
   // Map the variants
   const variants = group.map(apiVar => {
     const varientId = getNumericProperty(apiVar, "VarientId") || 0;
-    const variantAttributeValues_Only = getCaseInsensitiveProperty<string>(apiVar, "VariantAttributeValues_Only") || "";
-    const variantAttributes = getCaseInsensitiveProperty<string>(apiVar, "VariantAttributes") || "";
+    let variantAttributeValues_Only = getCaseInsensitiveProperty<string>(apiVar, "VariantAttributeValues_Only") || "";
+    let variantAttributes = getCaseInsensitiveProperty<string>(apiVar, "VariantAttributes") || "";
+
+    if (shouldHideVariant(apiVar)) {
+      variantAttributeValues_Only = "";
+      variantAttributes = "";
+    }
     const sku = getCaseInsensitiveProperty<string>(apiVar, "SKU") || "";
     const price = getNumericProperty(apiVar, "Price") || 0;
     const varSellPrice = getNumericProperty(apiVar, "SellPrice");
@@ -330,7 +383,7 @@ export function parseApiProductGroup(group: any[]): Product {
     rating: localProduct?.rating ?? 4.8,
     ratingCount: localProduct?.ratingCount ?? 120,
     desc: prodDesc || (localProduct?.desc ?? ""),
-    longDesc: localProduct?.longDesc ?? prodDesc ?? "",
+    longDesc: prodDesc || (localProduct?.longDesc ?? ""),
     benefits: localProduct?.benefits ?? [
       "Deeply nourishes & brightens skin",
       "Keeps skin soft, plump & hydrated"
@@ -362,6 +415,13 @@ export interface HomeSection {
 let homeSectionsCache: HomeSection[] | null = null;
 let homeSectionsPromise: Promise<HomeSection[]> | null = null;
 
+function prefetchImage(url: string) {
+  if (typeof window !== "undefined" && url && url !== "/Image/Noimage.jpg") {
+    const img = new Image();
+    img.src = url;
+  }
+}
+
 /**
  * Fetches dynamic homepage sections (table1, table2, table3 format) with caching.
  */
@@ -371,7 +431,7 @@ export async function fetchHomepageSectionsFromApi(forceRefresh = false): Promis
 
   homeSectionsPromise = (async () => {
     try {
-      const result: any = await post("/Home/GetHomeComponent", {});
+      const result: any = await post("/Home/GetHomeComponent", {}, { priority: "high" } as any);
       const data = getCaseInsensitiveProperty(result, "data") || result;
 
       const table2 = getCaseInsensitiveProperty<any[]>(data, "table2") || [];
@@ -435,6 +495,8 @@ export async function fetchHomepageSectionsFromApi(forceRefresh = false): Promis
           parsedItems = Object.keys(grouped).map(pIdStr => {
             return parseApiProductGroup(grouped[Number(pIdStr)]);
           });
+
+          syncProducts(parsedItems);
         }
 
         if (parsedItems.length > 0) {
@@ -450,6 +512,23 @@ export async function fetchHomepageSectionsFromApi(forceRefresh = false): Promis
       }
 
       homeSectionsCache = sections;
+
+      // Eagerly prefetch the first few images of each section to make them load instantly in the browser
+      try {
+        sections.forEach(sec => {
+          // Prefetch up to 4 items from each section
+          sec.items.slice(0, 4).forEach((item: any) => {
+            if (item.image) {
+              prefetchImage(item.image);
+            } else if (Array.isArray(item.images) && item.images[0]) {
+              prefetchImage(item.images[0]);
+            }
+          });
+        });
+      } catch (err) {
+        console.warn("Failed to prefetch section images", err);
+      }
+
       return sections;
     } catch (error) {
       console.error("Failed to fetch homepage sections", error);

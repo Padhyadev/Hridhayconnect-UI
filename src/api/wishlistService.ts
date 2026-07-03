@@ -1,4 +1,5 @@
 import { post } from './BaseService';
+import { shouldHideVariant } from './productService';
 
 export interface WishlistItem {
   Id: number;
@@ -32,13 +33,16 @@ export const wishlistService = {
       const response = await post('/Wishlist/GetAll', {});
       const items: WishlistItem[] = response?.data?.table2 || [];
       return items.map(item => {
-        if (item.VariantAttributeValues_Id && (item.VariantAttributeValues_Id.startsWith("13:") || item.VariantAttributeValues_Id === "13")) {
-          return {
-            ...item,
-            VariantAttributeValues_Only: item.VariantAttributeValues_Only.replace(/Weight\s*:\s*/i, "").trim()
-          };
+        let variantValOnly = item.VariantAttributeValues_Only || "";
+        if (shouldHideVariant(item)) {
+          variantValOnly = "";
+        } else if (item.VariantAttributeValues_Id && (item.VariantAttributeValues_Id.startsWith("13:") || item.VariantAttributeValues_Id === "13")) {
+          variantValOnly = variantValOnly.replace(/Weight\s*:\s*/i, "").trim();
         }
-        return item;
+        return {
+          ...item,
+          VariantAttributeValues_Only: variantValOnly
+        };
       });
     } catch (error) {
       console.error('Failed to fetch wishlist', error);

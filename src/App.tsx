@@ -49,6 +49,28 @@ export default function App() {
   const [selectedProductId, setSelectedProductId] = useState<string>("");
   const [showLoader, setShowLoader] = useState(true);
   const { isSignUpOpen, closeSignUp } = useSignUp();
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+
+  useEffect(() => {
+    // Eagerly prefetch critical homepage data (GetHomeComponent and Category products) immediately on mount
+    const prefetchCriticalData = async () => {
+      try {
+        const { fetchHomepageSectionsFromApi, fetchProductsFromApi } = await import("./api/productService");
+        
+        // Fetch homepage sections and carousel products in parallel
+        await Promise.all([
+          fetchHomepageSectionsFromApi().catch(() => []),
+          fetchProductsFromApi(0).catch(() => [])
+        ]);
+        
+        setIsDataLoaded(true);
+      } catch (err) {
+        console.error("Failed to prefetch critical homepage data", err);
+        setIsDataLoaded(true); // Proceed anyway on failure to avoid blocking the app
+      }
+    };
+    prefetchCriticalData();
+  }, []);
 
   useEffect(() => {
     // Pre-fetch category products in the background to populate the images cache for the homepage
@@ -56,7 +78,7 @@ export default function App() {
       try {
         const { fetchProductsFromApi } = await import("./api/productService");
         const { syncProducts } = await import("./data/products");
-        
+
         // Load in background
         const categories = [15, 16, 17, 18, 0];
         for (const catId of categories) {
@@ -64,13 +86,13 @@ export default function App() {
             if (fetched && fetched.length > 0) {
               syncProducts(fetched);
             }
-          }).catch(() => {});
+          }).catch(() => { });
         }
       } catch (err) {
         console.error("Failed to prefetch categories", err);
       }
     };
-    
+
     // Delay slightly to prioritize critical page load
     const timer = setTimeout(prefetchCategories, 1500);
     return () => clearTimeout(timer);
@@ -229,7 +251,7 @@ export default function App() {
   return (
     <div className="relative min-h-screen bg-[var(--color-cream)] text-[var(--color-dark-text)] overflow-hidden font-sans selection:bg-[var(--color-secondary)] selection:text-white">
       {/* Cinematic Loading Screen */}
-      <LoadingScreen onComplete={() => setShowLoader(false)} />
+      <LoadingScreen isDataLoaded={isDataLoaded} onComplete={() => setShowLoader(false)} />
 
       {/* Noise overlay */}
       <div className="fixed inset-0 noise-overlay z-50 mix-blend-overlay pointer-events-none"></div>

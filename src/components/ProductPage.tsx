@@ -9,6 +9,8 @@ import { products, Product, syncProducts } from "../data/products";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import { fetchProductsFromApi } from "../api/productService";
+import { ProductReviews } from "./ProductReviews";
+import { reviewService } from "../api/reviewService";
 
 interface ProductPageProps {
   productId: string;
@@ -16,30 +18,129 @@ interface ProductPageProps {
 }
 
 export function ProductPage({ productId, onBack }: ProductPageProps) {
+  // Helper to parse target product ID/slug, variant ID, and packaging from props
+  const parsePropsId = (rawId: string) => {
+    const parts = rawId.split("-");
+
+    let targetPacking: string | null = null;
+    let targetVariantId: number | null = null;
+    let targetProductId = rawId;
+
+    let partsToProcess = [...parts];
+
+    // Check if the last part is "Pouch" or "Bottle" (case-insensitive)
+    if (partsToProcess.length > 0) {
+      const last = partsToProcess[partsToProcess.length - 1].trim();
+      if (last.toLowerCase() === "pouch" || last.toLowerCase() === "bottle") {
+        targetPacking = last.charAt(0).toUpperCase() + last.slice(1).toLowerCase(); // Normalize case to "Pouch" or "Bottle"
+        partsToProcess.pop(); // remove it
+      }
+    }
+
+    // Now look at the new last part to see if it is a numeric variant ID
+    if (partsToProcess.length > 0) {
+      const last = partsToProcess[partsToProcess.length - 1];
+      const lastNum = Number(last);
+      if (!isNaN(lastNum)) {
+        // Double check if there is an exact string match for the whole remaining parts
+        const remainingId = partsToProcess.join("-");
+        const fullMatch = products.find(p => p.id === remainingId);
+        if (!fullMatch) {
+          targetVariantId = lastNum;
+          partsToProcess.pop(); // remove it
+        }
+      }
+    }
+
+    targetProductId = partsToProcess.join("-");
+
+    return { targetProductId, targetVariantId, targetPacking };
+  };
+
+  const { targetProductId, targetVariantId, targetPacking } = parsePropsId(productId);
+
+  const findProduct = (id: string) => {
+    const numeric = Number(id);
+    return products.find(p => p.id === id || (p.productId && p.productId === numeric));
+  };
+
   const [currentProduct, setCurrentProduct] = useState<Product>(() => {
-    return products.find(p => p.id === productId) || products[0];
+    const { targetProductId } = parsePropsId(productId);
+    return findProduct(targetProductId) || products[0];
   });
 
-  const [packaging, setPackaging] = useState("Pouch");
+  const [packaging, setPackaging] = useState(() => {
+    const { targetPacking } = parsePropsId(productId);
+    return targetPacking || "Pouch";
+  });
 
   const { addToCart, prepareCheckout } = useCart();
 
   const [isPageLoading, setIsPageLoading] = useState(() => {
-    return !products.some(p => p.id === productId);
+    const { targetProductId } = parsePropsId(productId);
+    return !products.some(p => p.id === targetProductId || (p.productId && p.productId === Number(targetProductId)));
   });
-  const [selectedVariant, setSelectedVariant] = useState<any>(null);
+  const [selectedVariant, setSelectedVariant] = useState<any>(() => {
+    const { targetProductId, targetVariantId } = parsePropsId(productId);
+    const prod = findProduct(targetProductId);
+    if (prod && prod.variants && prod.variants.length > 0) {
+      return prod.variants.find(v => Number(v.varientId) === targetVariantId) || prod.variants[0];
+    }
+    return null;
+  });
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [zoomStyle, setZoomStyle] = useState({ transformOrigin: "center center", display: "none" });
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [quantity, setQuantity] = useState(1);
-  const [activeTab, setActiveTab] = useState<'desc' | 'ingredients' | 'benefits' | 'faq'>('desc');
+  const [activeTab, setActiveTab] = useState<'desc' | 'ingredients' | 'benefits' | 'faq' | 'reviews'>('desc');
   const { toggleWishlist, isInWishlist } = useWishlist();
   const [cartAdded, setCartAdded] = useState(false);
   const [openFaqIdx, setOpenFaqIdx] = useState<number | null>(null);
   const [showStickyBar, setShowStickyBar] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
-
   const [selectedAttrs, setSelectedAttrs] = useState<Record<string, string>>({});
+
+  const [reviewStats, setReviewStats] = useState<{ averageRating: number; totalReviews: number }>({ averageRating: 0, totalReviews: 0 });
+
+  const renderProductDescription = (desc: string) => {
+    if (!desc) return null;
+    const hasHtml = /<[a-z][\s\S]*>/i.test(desc);
+    if (hasHtml) {
+      return <div dangerouslySetInnerHTML={{ __html: desc }} />;
+    }
+    return <div className="whitespace-pre-line">{desc}</div>;
+  };
+
+  const fetchReviewStats = async () => {
+    try {
+      const numericId = Number(currentProduct.productId || currentProduct.id);
+      if (isNaN(numericId) || numericId <= 0) return;
+      const response = await reviewService.getAll({
+        productId: numericId,
+        search: "",
+        start: 0,
+        length: 1,
+        sortColumnIndex: 7,
+        sortDirection: "desc"
+      });
+      if (response && response.isSuccess) {
+        const table1 = response.data?.table1 || [];
+        const table2 = response.data?.table2 || [];
+        const totalReviews = table1[0]?.FilteredRecords ?? table1[0]?.TotalRecords ?? 0;
+        const averageRating = table2[0]?.AverageRating ?? 0;
+        setReviewStats({
+          averageRating: typeof averageRating === 'number' ? averageRating : Number(averageRating) || 0,
+          totalReviews: typeof totalReviews === 'number' ? totalReviews : Number(totalReviews) || 0
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching review stats:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchReviewStats();
+  }, [currentProduct.productId, currentProduct.id]);
 
   // Helper to parse "Weight : 200, Packaging : Pouch" into { Weight: "200", Packaging: "Pouch" }
   const parseAttributes = (attrStr: any): Record<string, string> => {
@@ -130,7 +231,8 @@ export function ProductPage({ productId, onBack }: ProductPageProps) {
 
   // Reset states and fetch latest details when product changes
   useEffect(() => {
-    const local = products.find(p => p.id === productId);
+    const { targetProductId, targetVariantId, targetPacking } = parsePropsId(productId);
+    const local = findProduct(targetProductId);
     let isMounted = true;
 
     if (!local) {
@@ -151,10 +253,15 @@ export function ProductPage({ productId, onBack }: ProductPageProps) {
             if (mukhwas.length > 0) syncProducts(mukhwas);
             if (tea.length > 0) syncProducts(tea);
             if (specials.length > 0) syncProducts(specials);
-            const found = products.find(p => p.id === productId);
+            const found = findProduct(targetProductId);
             if (found) {
               setCurrentProduct({ ...found });
-              setSelectedVariant(found.variants && found.variants.length > 0 ? found.variants[0] : null);
+              setSelectedVariant(found.variants && found.variants.length > 0 ? (found.variants.find(v => Number(v.varientId) === targetVariantId) || found.variants[0]) : null);
+              if (targetPacking) {
+                setPackaging(targetPacking);
+              } else {
+                setPackaging("Pouch");
+              }
               document.title = `${found.name} | Hridhay Connect`;
               setIsPageLoading(false);
             } else {
@@ -174,7 +281,12 @@ export function ProductPage({ productId, onBack }: ProductPageProps) {
     } else {
       setIsPageLoading(false);
       setCurrentProduct(local);
-      setSelectedVariant(local.variants && local.variants.length > 0 ? local.variants[0] : null);
+      setSelectedVariant(local.variants && local.variants.length > 0 ? (local.variants.find(v => Number(v.varientId) === targetVariantId) || local.variants[0]) : null);
+      if (targetPacking) {
+        setPackaging(targetPacking);
+      } else {
+        setPackaging("Pouch");
+      }
       setActiveImageIdx(0);
       setQuantity(1);
       setActiveTab('desc');
@@ -196,11 +308,13 @@ export function ProductPage({ productId, onBack }: ProductPageProps) {
             const fetched = await fetchProductsFromApi(catId);
             if (fetched && fetched.length > 0 && isMounted) {
               syncProducts(fetched);
-              const updated = products.find(p => p.id === productId) || products[0];
+              const updated = findProduct(targetProductId) || products[0];
               setCurrentProduct({ ...updated });
               document.title = `${updated.name} | Hridhay Connect`;
               if (updated.variants && updated.variants.length > 0) {
                 setSelectedVariant(prev => {
+                  const targetMatch = updated.variants?.find(v => Number(v.varientId) === targetVariantId);
+                  if (targetMatch) return targetMatch;
                   const stillExists = updated.variants?.find(v => v.varientId === prev?.varientId);
                   return stillExists || updated.variants?.[0] || null;
                 });
@@ -271,10 +385,7 @@ export function ProductPage({ productId, onBack }: ProductPageProps) {
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
-  // Find related products (same category, excluding current product)
-  const relatedProducts = products
-    .filter(p => p.category === currentProduct.category && p.id !== currentProduct.id)
-    .slice(0, 3);
+
 
   if (isPageLoading) {
     return (
@@ -430,12 +541,15 @@ export function ProductPage({ productId, onBack }: ProductPageProps) {
             {/* Ratings & Reviews */}
             <div className="flex items-center gap-4 mb-6">
               <div className="flex gap-0.5 text-amber-500">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className={`w-4 h-4 ${i < Math.floor(currentProduct.rating) ? 'fill-current' : ''}`} />
-                ))}
+                {[...Array(5)].map((_, i) => {
+                  const roundedRating = Math.round(reviewStats.averageRating || 0);
+                  return (
+                    <Star key={i} className={`w-4 h-4 ${i < roundedRating ? 'fill-current' : ''}`} />
+                  );
+                })}
               </div>
               <span className="text-xs font-medium text-[var(--color-dark-text)]/60 font-general">
-                {currentProduct.rating} / 5.0 ({currentProduct.ratingCount} reviews)
+                {reviewStats.averageRating > 0 ? reviewStats.averageRating.toFixed(1) : "0.0"} / 5.0 ({reviewStats.totalReviews} {reviewStats.totalReviews === 1 ? 'review' : 'reviews'})
               </span>
             </div>
 
@@ -465,9 +579,9 @@ export function ProductPage({ productId, onBack }: ProductPageProps) {
             })()}
 
             {/* Short Editorial Description */}
-            <p className="text-sm sm:text-base text-[var(--color-dark-text)]/75 font-light font-satoshi leading-relaxed mb-8 break-words">
-              {currentProduct.longDesc}
-            </p>
+            <div className="text-sm sm:text-base text-[var(--color-dark-text)]/75 font-light font-satoshi leading-relaxed mb-8 break-words">
+              {renderProductDescription(currentProduct.longDesc)}
+            </div>
 
             {/* Variant Selector Pills */}
             {currentProduct.variants && currentProduct.variants.length > 1 && (() => {
@@ -584,11 +698,11 @@ export function ProductPage({ productId, onBack }: ProductPageProps) {
             {(() => {
               const baseStock = selectedVariant?.totalAvailableStock ?? currentProduct.totalAvailableStock;
               if (baseStock === undefined) return null;
-              
+
               const displayStock = Math.max(0, baseStock - quantity);
-              
+
               if (displayStock > 10) return null;
-              
+
               return (
                 <div className="mb-8">
                   <div className="inline-flex items-center gap-1.5 text-red-600 font-semibold text-xs uppercase tracking-wider bg-red-50 px-4 py-2.5 rounded-2xl border border-red-100">
@@ -745,6 +859,16 @@ export function ProductPage({ productId, onBack }: ProductPageProps) {
                   <motion.div layoutId="activeTabUnderline" className="absolute bottom-0 left-0 right-0 h-[2px] bg-[var(--color-primary)]" />
                 )}
               </button>
+
+              <button
+                onClick={() => setActiveTab('reviews')}
+                className={`relative py-2 text-left cursor-pointer transition-colors ${activeTab === 'reviews' ? 'text-[var(--color-primary)] font-medium' : 'text-[var(--color-dark-text)]/40 hover:text-[var(--color-dark-text)]/80'}`}
+              >
+                <span>Reviews</span>
+                {activeTab === 'reviews' && (
+                  <motion.div layoutId="activeTabUnderline" className="absolute bottom-0 left-0 right-0 h-[2px] bg-[var(--color-primary)]" />
+                )}
+              </button>
             </div>
           </div>
 
@@ -766,7 +890,7 @@ export function ProductPage({ productId, onBack }: ProductPageProps) {
                     </h3>
 
                     <div className="text-sm text-[var(--color-dark-text)]/75 font-light leading-relaxed space-y-4 font-satoshi">
-                      <p>{currentProduct.longDesc}</p>
+                      {renderProductDescription(currentProduct.longDesc)}
                       <p>
                         We prepare our formulations inside traditional apothecaries. The ingredients are hand-stirred in micro-batches to safeguard active plant nutrients from heat degradation. This produces a raw, nutrient-rich formula loaded with cellular benefits.
                       </p>
@@ -892,122 +1016,27 @@ export function ProductPage({ productId, onBack }: ProductPageProps) {
                   })}
                 </motion.div>
               )}
+
+              {activeTab === 'reviews' && (
+                <motion.div
+                  key="reviewsTab"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.4 }}
+                  className="w-full"
+                >
+                  <ProductReviews
+                    productId={Number(currentProduct.productId || currentProduct.id)}
+                    onReviewSubmitted={fetchReviewStats}
+                  />
+                </motion.div>
+              )}
             </AnimatePresence>
           </div>
         </section>
 
-        {/* 3. Customer Reviews Testimonial Section */}
-        <section className="mb-24 py-16 bg-white/30 rounded-[3rem] border border-white/50 px-6 sm:px-12">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
 
-            <div className="lg:col-span-4 space-y-4 text-center lg:text-left">
-              <span className="text-[var(--color-primary)] font-medium tracking-[0.2em] uppercase text-xs">Shared Reverence</span>
-              <h2 className="text-3xl sm:text-4xl font-serif text-black leading-tight font-light">
-                Verified Customer <br />
-                <span className="italic text-[var(--color-secondary)]">Experience Stories</span>
-              </h2>
-
-              <div className="flex flex-col items-center lg:items-start gap-2 pt-6">
-                <div className="text-5xl font-serif font-light text-black">{currentProduct.rating}</div>
-                <div className="flex gap-0.5 text-amber-500">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className={`w-4.5 h-4.5 ${i < Math.floor(currentProduct.rating) ? 'fill-current' : ''}`} />
-                  ))}
-                </div>
-                <span className="text-[10px] uppercase tracking-widest text-[var(--color-dark-text)]/50 mt-1 font-general">
-                  Based on {currentProduct.ratingCount} Reviews
-                </span>
-              </div>
-            </div>
-
-            <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {currentProduct.reviews?.map((rev: any, idx: number) => (
-                <div key={idx} className="bg-white/60 border border-white/80 p-6 rounded-3xl shadow-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex justify-between items-center mb-4">
-                      <div className="flex gap-0.5 text-amber-500">
-                        {[...Array(5)].map((_, i) => (
-                          <Star key={i} className={`w-3.5 h-3.5 ${i < rev.rating ? 'fill-current' : ''}`} />
-                        ))}
-                      </div>
-                      <span className="text-[9px] text-[var(--color-dark-text)]/40 font-general">{rev.date}</span>
-                    </div>
-                    <p className="text-xs text-[var(--color-dark-text)]/80 font-light font-satoshi italic leading-relaxed mb-6">
-                      “{rev.text}”
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-black/5 pt-4">
-                    <span className="text-xs font-serif font-semibold text-black">{rev.author}</span>
-                    {rev.tag && (
-                      <span className="text-[9px] font-semibold tracking-wider text-[var(--color-primary)] bg-[var(--color-primary)]/10 px-2 py-0.5 rounded-full uppercase">
-                        {rev.tag}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-          </div>
-        </section>
-
-        {/* 4. Related Products Slider */}
-        {relatedProducts.length > 0 && (
-          <section className="mb-24">
-            <div className="flex justify-between items-end mb-12">
-              <div>
-                <span className="text-[var(--color-primary)] font-medium tracking-[0.2em] uppercase text-xs mb-3 flex items-center gap-4">
-                  <span className="w-12 h-[1px] bg-[var(--color-primary)]"></span>
-                  Completed Ritual
-                </span>
-                <h2 className="text-2xl sm:text-4xl font-serif text-black leading-tight font-light">
-                  Complete Your <span className="italic text-[var(--color-secondary)]">Botanical Set</span>
-                </h2>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-8">
-              {relatedProducts.map((p, idx) => (
-                <a
-                  key={idx}
-                  href={`#product-${p.id}`}
-                  className="group cursor-pointer bg-white/40 border border-white/60 rounded-[2.2rem] p-5 shadow-sm hover:shadow-lg transition-all duration-500 flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="w-full aspect-[4/5] bg-[var(--color-beige)]/20 rounded-2xl overflow-hidden mb-5 relative">
-                      <img 
-                        src={p.images[0]} 
-                        alt={p.name} 
-                        loading="lazy"
-                        decoding="async"
-                        className={`w-full h-full object-contain object-center transition-all duration-700 ease-out group-hover:scale-110 ${p.images?.[1] ? 'group-hover:opacity-0' : ''}`} 
-                      />
-                      {p.images?.[1] && (
-                        <img 
-                          src={p.images[1]} 
-                          alt={`${p.name} alternate`} 
-                          loading="lazy"
-                          decoding="async"
-                          className="absolute inset-0 w-full h-full object-contain object-center opacity-0 group-hover:opacity-100 group-hover:scale-110 transition-all duration-700 ease-out" 
-                        />
-                      )}
-                    </div>
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="font-serif text-base font-semibold text-black group-hover:text-[var(--color-primary)] transition-colors line-clamp-1">{p.name}</h4>
-                      <span className="text-sm font-serif font-bold text-[var(--color-primary)] ml-2">₹{p.price}</span>
-                    </div>
-                    <p className="text-[11px] text-[var(--color-dark-text)]/60 font-light font-satoshi leading-relaxed line-clamp-2">{p.desc}</p>
-                  </div>
-
-                  <div className="border-t border-black/5 pt-4 mt-6 flex justify-between items-center text-[10px] text-[var(--color-primary)] font-semibold uppercase tracking-wider">
-                    <span>Explore details</span>
-                    <ArrowLeft className="w-3.5 h-3.5 rotate-180 group-hover:translate-x-1 transition-transform" />
-                  </div>
-                </a>
-              ))}
-            </div>
-          </section>
-        )}
 
       </div>
 

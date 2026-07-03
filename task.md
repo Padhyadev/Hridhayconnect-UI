@@ -1,36 +1,7 @@
 # Tasks
 
-- [x] Mobile "My Account" Redesign
-  - [x] Import `Heart` and `Menu` icons in `ProfilePage.tsx`
-  - [x] Add `isDrawerOpen` state in `ProfilePage.tsx`
-  - [x] Add `handleLogout` utility function in `ProfilePage.tsx`
-  - [x] Render hamburger button beside heading on mobile screens
-  - [x] Implement Framer Motion Left Drawer for mobile users (including header & menu items list)
-  - [x] Hide vertical sidebar on mobile screen size (`hidden lg:block`)
-- [x] Paragraph Text Justification
-  - [x] Justify BrandStory paragraphs in `BrandStory.tsx`
-  - [x] Justify Ingredients paragraph in `Ingredients.tsx`
-  - [x] Justify WellnessExperience paragraph in `WellnessExperience.tsx`
-  - [x] Justify AboutPage paragraphs (Origin, Formulation, Living Devotion) in `AboutPage.tsx`
-  - [x] Justify ContactPage paragraph in `ContactPage.tsx`
-  - [x] Justify Footer address in `Footer.tsx`
-  - [x] Justify Timeline of Growth milestone paragraphs in `AboutPage.tsx`
-  - [x] Justify Testimonial text paragraphs in `Testimonials.tsx`
-- [x] Hover Product Image Alternate Feature
-  - [x] Modify `SectionGrid.tsx` to add alternate hover image
-  - [x] Modify `SoapCategoryPage.tsx` to map secondary images and render hover alternate image
-  - [x] Modify `HairOilCategoryPage.tsx` to map secondary images and render hover alternate image
-  - [x] Modify `MukhwasCategoryPage.tsx` to map secondary images and render hover alternate image
-  - [x] Modify `TeaMasalaCategoryPage.tsx` to render hover alternate image
-  - [x] Modify `HridhaySpecialCategoryPage.tsx` to render hover alternate image
-  - [x] Modify `ProductPage.tsx` to render hover alternate image in Related Products grid
-- [x] Price Range Filter in Category Page
-  - [x] Update `CategorySidebar.tsx` to support minPrice/maxPrice props and render Price Filter Section
-  - [x] Implement filter state and logic in `SoapCategoryPage.tsx`
-  - [x] Implement filter state and logic in `HairOilCategoryPage.tsx`
-  - [x] Implement filter state and logic in `MukhwasCategoryPage.tsx`
-  - [x] Implement filter state and logic in `TeaMasalaCategoryPage.tsx`
-  - [x] Implement filter state and logic in `HridhaySpecialCategoryPage.tsx`
-- [x] Verification
-  - [x] Run typescript checks/compilations
-  - [x] Verify functionality on UI
+- [x] Add Review API Integration
+  - [x] Create `reviewService.ts` for Save and GetAll review API endpoints
+  - [x] Implement `ProductReviews.tsx` visual reviews display with pagination and submission form
+  - [x] Modify `ProductPage.tsx` to add "Reviews" tab and display `<ProductReviews>`
+  - [x] Manual syntax and type safety checks

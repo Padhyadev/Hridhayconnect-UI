@@ -93,7 +93,7 @@ export function Ingredients() {
             className="absolute z-20 w-[60%] aspect-[3/4] right-[0%] top-[10%] rounded-t-[10rem] rounded-b-[2rem] overflow-hidden border border-white/50 shadow-2xl backdrop-blur-sm"
           >
             <img
-              src="/HomePageimage/LargeNeem.png"
+              src="/HomePageimage/LargeNeem.jpg"
               alt="Botanical extracts"
               loading="lazy"
               decoding="async"
@@ -106,7 +106,7 @@ export function Ingredients() {
             className="absolute z-30 w-[45%] aspect-square left-[5%] bottom-[15%] rounded-full overflow-hidden border-8 border-[var(--color-background)] shadow-2xl"
           >
             <img
-              src="/HomePageimage/TeaIngredientscircle.png"
+              src="/HomePageimage/TeaIngredientscircle.jpg"
               alt="Texture"
               loading="lazy"
               decoding="async"

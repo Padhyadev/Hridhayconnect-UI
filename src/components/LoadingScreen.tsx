@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 // Static particle positions — defined outside component for stability
 const PARTICLES = [
@@ -33,12 +33,19 @@ const BRAND_LETTERS = "HRIDHAY CONNECT".split("");
 
 interface LoadingScreenProps {
   onComplete: () => void;
+  isDataLoaded?: boolean;
 }
 
-export function LoadingScreen({ onComplete }: LoadingScreenProps) {
+export function LoadingScreen({ onComplete, isDataLoaded }: LoadingScreenProps) {
   const [progress, setProgress] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
   const [completed, setCompleted] = useState(false);
+
+  const isDataLoadedRef = useRef(isDataLoaded);
+
+  useEffect(() => {
+    isDataLoadedRef.current = isDataLoaded;
+  }, [isDataLoaded]);
 
   useEffect(() => {
     // Check if user-agent is Lighthouse or similar speed test bot
@@ -54,9 +61,15 @@ export function LoadingScreen({ onComplete }: LoadingScreenProps) {
 
     let raf: number;
     const startTime = performance.now();
+    const MAX_TIMEOUT = 6000; // Force load after 6 seconds max
+    let forceProceed = false;
 
     const tick = (now: number) => {
       const elapsed = now - startTime;
+      if (elapsed > MAX_TIMEOUT) {
+        forceProceed = true;
+      }
+
       const t = Math.min(elapsed / totalDuration, 1);
 
       // Custom easing: cubic ease-in-out, slow near end
@@ -65,10 +78,17 @@ export function LoadingScreen({ onComplete }: LoadingScreenProps) {
           ? 4 * t * t * t
           : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
-      const newProgress = Math.round(eased * 100);
+      let newProgress = Math.round(eased * 100);
+      
+      const dataReady = isDataLoadedRef.current === undefined || isDataLoadedRef.current || forceProceed;
+
+      if (!dataReady && newProgress >= 95) {
+        newProgress = 95;
+      }
+
       setProgress(newProgress);
 
-      if (t < 1) {
+      if (t < 1 || !dataReady) {
         raf = requestAnimationFrame(tick);
       } else {
         setProgress(100);

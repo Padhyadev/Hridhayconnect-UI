@@ -1,4 +1,4 @@
-import { ChevronDown, Sparkles, ArrowRight, ShoppingBag, User, LogOut, MapPin, Gift, Bell, X, Check, Heart, Shield } from "lucide-react";
+import { ChevronDown, ShoppingBag, User, LogOut, MapPin, Gift, Bell, X, Check, Heart, Shield } from "lucide-react";
 import React, { useState, useEffect } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCart } from "../context/CartContext";
@@ -226,10 +226,10 @@ export function Navigation({ currentPage = 'home' }: NavigationProps) {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 8, scale: 0.98 }}
                     transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                    className="absolute left-1/2 -translate-x-1/2 top-full mt-4 w-[760px] bg-white/90 backdrop-blur-xl border border-white/50 rounded-[2rem] shadow-[0_20px_50px_rgba(91,42,134,0.08)] overflow-hidden z-50 p-8 grid grid-cols-12 gap-8 text-left"
+                    className="absolute left-1/2 -translate-x-1/2 top-full mt-4 w-[540px] bg-white/90 backdrop-blur-xl border border-white/50 rounded-[2rem] shadow-[0_20px_50px_rgba(91,42,134,0.08)] overflow-hidden z-50 p-8 grid grid-cols-12 gap-8 text-left"
                   >
                     {categories.map((category, index) => (
-                      <div key={index} className="col-span-4 flex flex-col">
+                      <div key={index} className="col-span-6 flex flex-col">
                         <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#5B2A86]/80 mb-6 border-b border-[#5B2A86]/5 pb-2">
                           {category.title}
                         </span>
@@ -255,29 +255,6 @@ export function Navigation({ currentPage = 'home' }: NavigationProps) {
                         </div>
                       </div>
                     ))}
-
-                    {/* Featured Card */}
-                    <div className="col-span-4 bg-gradient-to-br from-[#5B2A86]/5 to-[#A678D6]/5 rounded-2xl p-5 border border-[#5B2A86]/10 flex flex-col justify-between relative overflow-hidden group/card">
-                      <div className="absolute -bottom-10 -right-10 w-28 h-28 rounded-full bg-[#5B2A86]/10 blur-xl group-hover/card:scale-125 transition-transform duration-500" />
-                      <div>
-                        <div className="inline-flex items-center gap-1.5 bg-[#5B2A86]/15 text-[#5B2A86] px-2.5 py-1 rounded-full text-[10px] font-semibold tracking-wider uppercase mb-4">
-                          <Sparkles className="w-3 h-3 text-[#5B2A86] animate-pulse" />
-                          <span>Ritual Selection</span>
-                        </div>
-                        <h4 className="text-xs font-serif font-semibold text-[#1B1720] mb-1">Amethyst Revival Serum</h4>
-                        <p className="text-[10px] text-[#1B1720]/60 leading-relaxed font-light font-satoshi">
-                          Nurture skin's cellular beauty with wild-harvested lavender active & cold-pressed nectar.
-                        </p>
-                      </div>
-                      <a
-                        href="#featured"
-                        onClick={() => setIsOpen(false)}
-                        className="mt-6 inline-flex items-center gap-2 text-xs font-semibold text-[#5B2A86] hover:text-[#7A49A5] transition-colors group/link"
-                      >
-                        <span>Explore Collection</span>
-                        <ArrowRight className="w-3.5 h-3.5 group-hover/link:translate-x-1 transition-transform" />
-                      </a>
-                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>

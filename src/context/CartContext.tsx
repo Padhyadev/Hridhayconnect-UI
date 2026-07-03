@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { Product, products } from "../data/products";
-import { getCaseInsensitiveProperty, normalizeSlug, resolveImageUrl } from "../api/productService";
+import { getCaseInsensitiveProperty, normalizeSlug, resolveImageUrl, shouldHideVariant } from "../api/productService";
 import { post, del } from "../api/BaseService";
 
 export interface CartItem {
@@ -87,6 +87,10 @@ export function resolveCartItem(apiCartItem: any): CartItem | null {
 
   const variantAttributeValuesOnlyRaw = getCaseInsensitiveProperty<any>(apiCartItem, "VariantAttributeValues_Only");
   let variantAttributeValuesOnly = typeof variantAttributeValuesOnlyRaw === "string" ? variantAttributeValuesOnlyRaw.trim() : "";
+
+  if (shouldHideVariant(apiCartItem)) {
+    variantAttributeValuesOnly = "";
+  }
 
   const variantAttributeValuesIdRaw = getCaseInsensitiveProperty<any>(apiCartItem, "VariantAttributeValues_Id");
   const variantAttributeValuesId = typeof variantAttributeValuesIdRaw === "string" ? variantAttributeValuesIdRaw.trim() : "";
